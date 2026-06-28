@@ -1,10 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 
 const API_KEY = "$2a$10$pxFueLkXlFnO9rCYPKspH..q5JZHRpx/PI4rY3.p9jpOddn.r88HS";
-const BINS = {
-  tasks: null,
-  shopping: null,
-};
 
 const PALETTE = {
   bg: "#F7F4FB",
@@ -22,7 +18,6 @@ const PALETTE = {
 async function getBinId(key) {
   const stored = localStorage.getItem("binid_" + key);
   if (stored) return stored;
-
   const res = await fetch("https://api.jsonbin.io/v3/b", {
     method: "POST",
     headers: {
@@ -90,7 +85,6 @@ function Section({ title, emoji, storageKey, accentColor, bgAccent }) {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const inputRef = useRef();
-  const pollRef = useRef();
 
   const fetchItems = async () => {
     try {
@@ -104,9 +98,8 @@ function Section({ title, emoji, storageKey, accentColor, bgAccent }) {
 
   useEffect(() => {
     fetchItems();
-    // Poll every 5 seconds for real-time sync
-    pollRef.current = setInterval(fetchItems, 5000);
-    return () => clearInterval(pollRef.current);
+    const poll = setInterval(fetchItems, 5000);
+    return () => clearInterval(poll);
   }, []);
 
   const save = async (newItems) => {
@@ -137,18 +130,15 @@ function Section({ title, emoji, storageKey, accentColor, bgAccent }) {
         </div>
         {syncing && <div style={{ fontSize: 11, color: PALETTE.muted }}>⏳ sync...</div>}
       </div>
-
       {total > 0 && (
         <div style={{ height: 5, borderRadius: 99, background: "#F0EBF8", marginBottom: 18, overflow: "hidden" }}>
           <div style={{ height: "100%", width: `${total ? (doneCount / total) * 100 : 0}%`, background: accentColor, borderRadius: 99, transition: "width 0.4s ease" }} />
         </div>
       )}
-
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
         <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && addItem()} placeholder="Ajouter un élément..." style={{ flex: 1, border: `1.5px solid #E8DFF6`, borderRadius: 12, padding: "10px 14px", fontSize: 14, outline: "none", background: PALETTE.bg, color: PALETTE.text, fontFamily: "inherit" }} />
         <button onClick={addItem} style={{ background: accentColor, border: "none", borderRadius: 12, width: 42, height: 42, cursor: "pointer", fontSize: 22, color: "white", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>+</button>
       </div>
-
       <div>
         {loading ? (
           <div style={{ textAlign: "center", padding: 24, color: PALETTE.muted, fontSize: 14 }}>Chargement…</div>
