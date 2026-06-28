@@ -1,41 +1,26 @@
 import { useState, useEffect, useRef } from "react";
 
-const API_KEY = "$2a$10$pxFueLkXlFnO9rCYPKspH..q5JZHRpx/PI4rY3.p9jpOddn.r88HS";
+const SHEET_ID = "liste-matelo-" + btoa("matthieuchv").slice(0, 8);
+const API = "https://kvdb.io/9BzxQLB6fgkXnhKEHRCpVD/";
 
 const PALETTE = {
   bg: "#F7F4FB", card: "#FFFFFF", primary: "#9B7FD4", primaryLight: "#EDE7F6",
-  accent: "#F48FB1", accentLight: "#FCE4EC", text: "#2D2040", muted: "#9E8DB0",
+  accentLight: "#FCE4EC", text: "#2D2040", muted: "#9E8DB0",
   doneLine: "#66BB6A", shadow: "0 4px 24px rgba(155,127,212,0.10)",
 };
 
-async function getBinId(key) {
-  const stored = localStorage.getItem("binid_" + key);
-  if (stored) return stored;
-  const res = await fetch("https://api.jsonbin.io/v3/b", {
+async function load(key) {
+  try {
+    const res = await fetch(API + key);
+    if (!res.ok) return [];
+    const text = await res.text();
+    return JSON.parse(text) || [];
+  } catch { return []; }
+}
+
+async function save(key, items) {
+  await fetch(API + key, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-Master-Key": API_KEY, "X-Bin-Name": "liste-matelo-" + key },
-    body: JSON.stringify([]),
-  });
-  const data = await res.json();
-  const id = data.metadata.id;
-  localStorage.setItem("binid_" + key, id);
-  return id;
-}
-
-async function loadItems(key) {
-  const binId = await getBinId(key);
-  const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
-    headers: { "X-Master-Key": API_KEY },
-  });
-  const data = await res.json();
-  return data.record || [];
-}
-
-async function saveItems(key, items) {
-  const binId = await getBinId(key);
-  await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json", "X-Master-Key": API_KEY },
     body: JSON.stringify(items),
   });
 }
@@ -51,7 +36,7 @@ function CheckCircle({ checked, color }) {
 function TaskItem({ item, onToggle, onDelete, accentColor }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", borderRadius: 14, background: item.done ? "#F1FBF2" : PALETTE.card, border: `1.5px solid ${item.done ? "#A5D6A7" : "#EDE7F6"}`, marginBottom: 8, position: "relative", overflow: "hidden" }}>
-      {item.done && (<div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, borderRadius: "4px 0 0 4px", background: PALETTE.doneLine }} />)}
+      {item.done && (<div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: PALETTE.doneLine }} />)}
       <div onClick={() => onToggle(item.id)} style={{ cursor: "pointer" }}>
         <CheckCircle checked={item.done} color={item.done ? PALETTE.doneLine : accentColor} />
       </div>
@@ -59,7 +44,7 @@ function TaskItem({ item, onToggle, onDelete, accentColor }) {
         {item.text}
         {item.done && (<span style={{ marginLeft: 8, fontSize: 12, color: PALETTE.doneLine, fontWeight: 600, background: "#E8F5E9", borderRadius: 20, padding: "2px 8px" }}>✓ Fait !</span>)}
       </span>
-      <button onClick={() => onDelete(item.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 4px", borderRadius: 6, color: "#BDBDBD", fontSize: 17 }}>×</button>
+      <button onClick={() => onDelete(item.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 4px", color: "#BDBDBD", fontSize: 17 }}>×</button>
     </div>
   );
 }
@@ -70,37 +55,35 @@ function Section({ title, emoji, storageKey, accentColor, bgAccent }) {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const inputRef = useRef();
-  const isSaving = useRef(false);
+  const saving = useRef(false);
 
-  const fetchItems = async () => {
-    if (isSaving.current) return;
-    try {
-      const data = await loadItems(storageKey);
-      setItems(data);
-    } catch (e) {}
+  const fetch_ = async () => {
+    if (saving.current) return;
+    const data = await load(storageKey);
+    setItems(data);
     setLoading(false);
   };
 
   useEffect(() => {
-    fetchItems();
-    const poll = setInterval(fetchItems, 6000);
+    fetch_();
+    const poll = setInterval(fetch_, 6000);
     return () => clearInterval(poll);
   }, []);
 
-  const save = async (newItems) => {
-    isSaving.current = true;
+  const saveItems = async (newItems) => {
+    saving.current = true;
     setItems(newItems);
     setSyncing(true);
-    await saveItems(storageKey, newItems);
+    await save(storageKey, newItems);
     setSyncing(false);
-    setTimeout(() => { isSaving.current = false; }, 1000);
+    setTimeout(() => { saving.current = false; }, 2000);
   };
 
   const addItem = async () => {
     const text = input.trim();
     if (!text) return;
     setInput("");
-    await save([...items, { id: Date.now(), text, done: false }]);
+    await saveItems([...items, { id: Date.now(), text, done: false }]);
     inputRef.current?.focus();
   };
 
@@ -136,17 +119,17 @@ function Section({ title, emoji, storageKey, accentColor, bgAccent }) {
           </div>
         ) : (
           <>
-            {items.filter(i => !i.done).map(item => (<TaskItem key={item.id} item={item} onToggle={(id) => save(items.map(i => i.id === id ? { ...i, done: !i.done } : i))} onDelete={(id) => save(items.filter(i => i.id !== id))} accentColor={accentColor} />))}
+            {items.filter(i => !i.done).map(item => (<TaskItem key={item.id} item={item} onToggle={(id) => saveItems(items.map(i => i.id === id ? { ...i, done: !i.done } : i))} onDelete={(id) => saveItems(items.filter(i => i.id !== id))} accentColor={accentColor} />))}
             {items.filter(i => i.done).length > 0 && (
               <>
                 <div style={{ fontSize: 11, fontWeight: 600, color: PALETTE.muted, textTransform: "uppercase", margin: "14px 4px 8px" }}>Effectuées</div>
-                {items.filter(i => i.done).map(item => (<TaskItem key={item.id} item={item} onToggle={(id) => save(items.map(i => i.id === id ? { ...i, done: !i.done } : i))} onDelete={(id) => save(items.filter(i => i.id !== id))} accentColor={accentColor} />))}
+                {items.filter(i => i.done).map(item => (<TaskItem key={item.id} item={item} onToggle={(id) => saveItems(items.map(i => i.id === id ? { ...i, done: !i.done } : i))} onDelete={(id) => saveItems(items.filter(i => i.id !== id))} accentColor={accentColor} />))}
               </>
             )}
           </>
         )}
       </div>
-      {doneCount > 0 && (<button onClick={() => save(items.filter(i => !i.done))} style={{ marginTop: 12, background: "none", border: "1.5px solid #E0D7F0", borderRadius: 10, padding: "7px 14px", fontSize: 12, color: PALETTE.muted, cursor: "pointer", width: "100%", fontFamily: "inherit" }}>Effacer les tâches effectuées ({doneCount})</button>)}
+      {doneCount > 0 && (<button onClick={() => saveItems(items.filter(i => !i.done))} style={{ marginTop: 12, background: "none", border: "1.5px solid #E0D7F0", borderRadius: 10, padding: "7px 14px", fontSize: 12, color: PALETTE.muted, cursor: "pointer", width: "100%", fontFamily: "inherit" }}>Effacer les tâches effectuées ({doneCount})</button>)}
     </div>
   );
 }
