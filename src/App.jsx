@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 
-const STORAGE_KEYS = {
-  tasks: "couple-tasks-v1",
-  shopping: "couple-shopping-v1",
+const API_KEY = "$2a$10$pxFueLkXlFnO9rCYPKspH..q5JZHRpx/PI4rY3.p9jpOddn.r88HS";
+const BINS = {
+  tasks: null,
+  shopping: null,
 };
 
 const PALETTE = {
@@ -14,10 +15,49 @@ const PALETTE = {
   accentLight: "#FCE4EC",
   text: "#2D2040",
   muted: "#9E8DB0",
-  done: "#C8E6C9",
   doneLine: "#66BB6A",
   shadow: "0 4px 24px rgba(155,127,212,0.10)",
 };
+
+async function getBinId(key) {
+  const stored = localStorage.getItem("binid_" + key);
+  if (stored) return stored;
+
+  const res = await fetch("https://api.jsonbin.io/v3/b", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Master-Key": API_KEY,
+      "X-Bin-Name": "liste-matelo-" + key,
+    },
+    body: JSON.stringify([]),
+  });
+  const data = await res.json();
+  const id = data.metadata.id;
+  localStorage.setItem("binid_" + key, id);
+  return id;
+}
+
+async function loadItems(key) {
+  const binId = await getBinId(key);
+  const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
+    headers: { "X-Master-Key": API_KEY },
+  });
+  const data = await res.json();
+  return data.record || [];
+}
+
+async function saveItems(key, items) {
+  const binId = await getBinId(key);
+  await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Master-Key": API_KEY,
+    },
+    body: JSON.stringify(items),
+  });
+}
 
 function CheckCircle({ checked, color }) {
   return (
@@ -47,22 +87,39 @@ function TaskItem({ item, onToggle, onDelete, accentColor }) {
 function Section({ title, emoji, storageKey, accentColor, bgAccent }) {
   const [items, setItems] = useState([]);
   const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const inputRef = useRef();
+  const pollRef = useRef();
 
-  useEffect(() => {
-    const saved = localStorage.getItem(storageKey);
-    if (saved) setItems(JSON.parse(saved));
-  }, [storageKey]);
-
-  const save = (newItems) => {
-    setItems(newItems);
-    localStorage.setItem(storageKey, JSON.stringify(newItems));
+  const fetchItems = async () => {
+    try {
+      const data = await loadItems(storageKey);
+      setItems(data);
+    } catch (e) {
+      console.error(e);
+    }
+    setLoading(false);
   };
 
-  const addItem = () => {
+  useEffect(() => {
+    fetchItems();
+    // Poll every 5 seconds for real-time sync
+    pollRef.current = setInterval(fetchItems, 5000);
+    return () => clearInterval(pollRef.current);
+  }, []);
+
+  const save = async (newItems) => {
+    setItems(newItems);
+    setSyncing(true);
+    await saveItems(storageKey, newItems);
+    setSyncing(false);
+  };
+
+  const addItem = async () => {
     const text = input.trim();
     if (!text) return;
-    save([...items, { id: Date.now(), text, done: false }]);
+    await save([...items, { id: Date.now(), text, done: false }]);
     setInput("");
     inputRef.current?.focus();
   };
@@ -78,18 +135,24 @@ function Section({ title, emoji, storageKey, accentColor, bgAccent }) {
           <div style={{ fontSize: 17, fontWeight: 700, color: PALETTE.text }}>{title}</div>
           {total > 0 && (<div style={{ fontSize: 12, color: PALETTE.muted, marginTop: 2 }}>{doneCount}/{total} effectuée{doneCount > 1 ? "s" : ""}</div>)}
         </div>
+        {syncing && <div style={{ fontSize: 11, color: PALETTE.muted }}>⏳ sync...</div>}
       </div>
+
       {total > 0 && (
         <div style={{ height: 5, borderRadius: 99, background: "#F0EBF8", marginBottom: 18, overflow: "hidden" }}>
           <div style={{ height: "100%", width: `${total ? (doneCount / total) * 100 : 0}%`, background: accentColor, borderRadius: 99, transition: "width 0.4s ease" }} />
         </div>
       )}
+
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
         <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && addItem()} placeholder="Ajouter un élément..." style={{ flex: 1, border: `1.5px solid #E8DFF6`, borderRadius: 12, padding: "10px 14px", fontSize: 14, outline: "none", background: PALETTE.bg, color: PALETTE.text, fontFamily: "inherit" }} />
         <button onClick={addItem} style={{ background: accentColor, border: "none", borderRadius: 12, width: 42, height: 42, cursor: "pointer", fontSize: 22, color: "white", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>+</button>
       </div>
+
       <div>
-        {items.length === 0 ? (
+        {loading ? (
+          <div style={{ textAlign: "center", padding: 24, color: PALETTE.muted, fontSize: 14 }}>Chargement…</div>
+        ) : items.length === 0 ? (
           <div style={{ textAlign: "center", padding: "24px 12px", color: PALETTE.muted, fontSize: 14, border: "1.5px dashed #DDD5F0", borderRadius: 14 }}>
             <div style={{ fontSize: 28, marginBottom: 8 }}>{emoji}</div>
             Ajoutez votre première tâche !
@@ -118,10 +181,11 @@ export default function App() {
         <div style={{ fontSize: 36, marginBottom: 8 }}>💑</div>
         <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800, color: PALETTE.text }}>Notre espace partagé</h1>
         <p style={{ margin: "8px 0 0", color: PALETTE.muted, fontSize: 15 }}>Organisez votre quotidien ensemble ✨</p>
+        <p style={{ margin: "4px 0 0", color: PALETTE.muted, fontSize: 12 }}>🔄 Synchronisé toutes les 5 secondes</p>
       </div>
       <div style={{ display: "flex", gap: 24, justifyContent: "center", flexWrap: "wrap", maxWidth: 1100, margin: "0 auto" }}>
-        <Section title="Tâches ménagères" emoji="🏠" storageKey={STORAGE_KEYS.tasks} accentColor={PALETTE.primary} bgAccent={PALETTE.primaryLight} />
-        <Section title="Liste de courses" emoji="🛒" storageKey={STORAGE_KEYS.shopping} accentColor="#E91E8C" bgAccent={PALETTE.accentLight} />
+        <Section title="Tâches ménagères" emoji="🏠" storageKey="tasks" accentColor={PALETTE.primary} bgAccent={PALETTE.primaryLight} />
+        <Section title="Liste de courses" emoji="🛒" storageKey="shopping" accentColor="#E91E8C" bgAccent={PALETTE.accentLight} />
       </div>
       <p style={{ textAlign: "center", marginTop: 32, fontSize: 12, color: "#C9BDD8" }}>Cochez pour valider ✓</p>
     </div>
