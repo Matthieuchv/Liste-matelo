@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 
-const SHEET_ID = "liste-matelo-" + btoa("matthieuchv").slice(0, 8);
 const API = "https://kvdb.io/9BzxQLB6fgkXnhKEHRCpVD/";
 
 const PALETTE = {
@@ -9,7 +8,7 @@ const PALETTE = {
   doneLine: "#66BB6A", shadow: "0 4px 24px rgba(155,127,212,0.10)",
 };
 
-async function load(key) {
+async function loadData(key) {
   try {
     const res = await fetch(API + key);
     if (!res.ok) return [];
@@ -18,11 +17,8 @@ async function load(key) {
   } catch { return []; }
 }
 
-async function save(key, items) {
-  await fetch(API + key, {
-    method: "POST",
-    body: JSON.stringify(items),
-  });
+async function saveData(key, items) {
+  await fetch(API + key, { method: "POST", body: JSON.stringify(items) });
 }
 
 function CheckCircle({ checked, color }) {
@@ -56,25 +52,32 @@ function Section({ title, emoji, storageKey, accentColor, bgAccent }) {
   const [syncing, setSyncing] = useState(false);
   const inputRef = useRef();
   const saving = useRef(false);
+  const inputRef2 = useRef("");
 
-  const fetch_ = async () => {
+  const fetchData = async () => {
     if (saving.current) return;
-    const data = await load(storageKey);
+    if (inputRef2.current !== "") return;
+    const data = await loadData(storageKey);
     setItems(data);
     setLoading(false);
   };
 
   useEffect(() => {
-    fetch_();
-    const poll = setInterval(fetch_, 6000);
+    fetchData();
+    const poll = setInterval(fetchData, 6000);
     return () => clearInterval(poll);
   }, []);
+
+  const handleInput = (val) => {
+    setInput(val);
+    inputRef2.current = val;
+  };
 
   const saveItems = async (newItems) => {
     saving.current = true;
     setItems(newItems);
     setSyncing(true);
-    await save(storageKey, newItems);
+    await saveData(storageKey, newItems);
     setSyncing(false);
     setTimeout(() => { saving.current = false; }, 2000);
   };
@@ -82,7 +85,7 @@ function Section({ title, emoji, storageKey, accentColor, bgAccent }) {
   const addItem = async () => {
     const text = input.trim();
     if (!text) return;
-    setInput("");
+    handleInput("");
     await saveItems([...items, { id: Date.now(), text, done: false }]);
     inputRef.current?.focus();
   };
@@ -106,7 +109,7 @@ function Section({ title, emoji, storageKey, accentColor, bgAccent }) {
         </div>
       )}
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && addItem()} placeholder="Ajouter un élément..." style={{ flex: 1, border: `1.5px solid #E8DFF6`, borderRadius: 12, padding: "10px 14px", fontSize: 14, outline: "none", background: PALETTE.bg, color: PALETTE.text, fontFamily: "inherit" }} />
+        <input ref={inputRef} value={input} onChange={e => handleInput(e.target.value)} onKeyDown={e => e.key === "Enter" && addItem()} placeholder="Ajouter un élément..." style={{ flex: 1, border: `1.5px solid #E8DFF6`, borderRadius: 12, padding: "10px 14px", fontSize: 14, outline: "none", background: PALETTE.bg, color: PALETTE.text, fontFamily: "inherit" }} />
         <button onClick={addItem} style={{ background: accentColor, border: "none", borderRadius: 12, width: 42, height: 42, cursor: "pointer", fontSize: 22, color: "white", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>+</button>
       </div>
       <div>
