@@ -3,16 +3,9 @@ import { useState, useEffect, useRef } from "react";
 const API_KEY = "$2a$10$pxFueLkXlFnO9rCYPKspH..q5JZHRpx/PI4rY3.p9jpOddn.r88HS";
 
 const PALETTE = {
-  bg: "#F7F4FB",
-  card: "#FFFFFF",
-  primary: "#9B7FD4",
-  primaryLight: "#EDE7F6",
-  accent: "#F48FB1",
-  accentLight: "#FCE4EC",
-  text: "#2D2040",
-  muted: "#9E8DB0",
-  doneLine: "#66BB6A",
-  shadow: "0 4px 24px rgba(155,127,212,0.10)",
+  bg: "#F7F4FB", card: "#FFFFFF", primary: "#9B7FD4", primaryLight: "#EDE7F6",
+  accent: "#F48FB1", accentLight: "#FCE4EC", text: "#2D2040", muted: "#9E8DB0",
+  doneLine: "#66BB6A", shadow: "0 4px 24px rgba(155,127,212,0.10)",
 };
 
 async function getBinId(key) {
@@ -20,11 +13,7 @@ async function getBinId(key) {
   if (stored) return stored;
   const res = await fetch("https://api.jsonbin.io/v3/b", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Master-Key": API_KEY,
-      "X-Bin-Name": "liste-matelo-" + key,
-    },
+    headers: { "Content-Type": "application/json", "X-Master-Key": API_KEY, "X-Bin-Name": "liste-matelo-" + key },
     body: JSON.stringify([]),
   });
   const data = await res.json();
@@ -46,35 +35,31 @@ async function saveItems(key, items) {
   const binId = await getBinId(key);
   await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
     method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Master-Key": API_KEY,
-    },
+    headers: { "Content-Type": "application/json", "X-Master-Key": API_KEY },
     body: JSON.stringify(items),
   });
 }
 
 function CheckCircle({ checked, color }) {
   return (
-    <div style={{ width: 26, height: 26, borderRadius: "50%", border: checked ? "none" : `2.5px solid ${color}`, background: checked ? color : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.25s cubic-bezier(.4,0,.2,1)", cursor: "pointer" }}>
+    <div style={{ width: 26, height: 26, borderRadius: "50%", border: checked ? "none" : `2.5px solid ${color}`, background: checked ? color : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.25s", cursor: "pointer" }}>
       {checked && (<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 7L5.5 10L11.5 4" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>)}
     </div>
   );
 }
 
 function TaskItem({ item, onToggle, onDelete, accentColor }) {
-  const [hovered, setHovered] = useState(false);
   return (
-    <div onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", borderRadius: 14, background: item.done ? "#F1FBF2" : PALETTE.card, border: `1.5px solid ${item.done ? "#A5D6A7" : "#EDE7F6"}`, marginBottom: 8, transition: "all 0.2s ease", position: "relative", overflow: "hidden" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", borderRadius: 14, background: item.done ? "#F1FBF2" : PALETTE.card, border: `1.5px solid ${item.done ? "#A5D6A7" : "#EDE7F6"}`, marginBottom: 8, position: "relative", overflow: "hidden" }}>
       {item.done && (<div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, borderRadius: "4px 0 0 4px", background: PALETTE.doneLine }} />)}
       <div onClick={() => onToggle(item.id)} style={{ cursor: "pointer" }}>
         <CheckCircle checked={item.done} color={item.done ? PALETTE.doneLine : accentColor} />
       </div>
-      <span style={{ flex: 1, fontSize: 15, color: item.done ? "#8ab88c" : PALETTE.text, textDecoration: item.done ? "line-through" : "none", fontWeight: item.done ? 400 : 500, transition: "all 0.2s ease", wordBreak: "break-word" }}>
+      <span style={{ flex: 1, fontSize: 15, color: item.done ? "#8ab88c" : PALETTE.text, textDecoration: item.done ? "line-through" : "none", fontWeight: item.done ? 400 : 500, wordBreak: "break-word" }}>
         {item.text}
         {item.done && (<span style={{ marginLeft: 8, fontSize: 12, color: PALETTE.doneLine, fontWeight: 600, background: "#E8F5E9", borderRadius: 20, padding: "2px 8px" }}>✓ Fait !</span>)}
       </span>
-      {(hovered || item.done) && (<button onClick={() => onDelete(item.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 4px", borderRadius: 6, color: "#BDBDBD", fontSize: 17 }}>×</button>)}
+      <button onClick={() => onDelete(item.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 4px", borderRadius: 6, color: "#BDBDBD", fontSize: 17 }}>×</button>
     </div>
   );
 }
@@ -85,35 +70,37 @@ function Section({ title, emoji, storageKey, accentColor, bgAccent }) {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const inputRef = useRef();
+  const isSaving = useRef(false);
 
   const fetchItems = async () => {
+    if (isSaving.current) return;
     try {
       const data = await loadItems(storageKey);
       setItems(data);
-    } catch (e) {
-      console.error(e);
-    }
+    } catch (e) {}
     setLoading(false);
   };
 
   useEffect(() => {
     fetchItems();
-    const poll = setInterval(fetchItems, 5000);
+    const poll = setInterval(fetchItems, 6000);
     return () => clearInterval(poll);
   }, []);
 
   const save = async (newItems) => {
+    isSaving.current = true;
     setItems(newItems);
     setSyncing(true);
     await saveItems(storageKey, newItems);
     setSyncing(false);
+    setTimeout(() => { isSaving.current = false; }, 1000);
   };
 
   const addItem = async () => {
     const text = input.trim();
     if (!text) return;
-    await save([...items, { id: Date.now(), text, done: false }]);
     setInput("");
+    await save([...items, { id: Date.now(), text, done: false }]);
     inputRef.current?.focus();
   };
 
@@ -132,7 +119,7 @@ function Section({ title, emoji, storageKey, accentColor, bgAccent }) {
       </div>
       {total > 0 && (
         <div style={{ height: 5, borderRadius: 99, background: "#F0EBF8", marginBottom: 18, overflow: "hidden" }}>
-          <div style={{ height: "100%", width: `${total ? (doneCount / total) * 100 : 0}%`, background: accentColor, borderRadius: 99, transition: "width 0.4s ease" }} />
+          <div style={{ height: "100%", width: `${(doneCount / total) * 100}%`, background: accentColor, borderRadius: 99, transition: "width 0.4s ease" }} />
         </div>
       )}
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
@@ -171,7 +158,7 @@ export default function App() {
         <div style={{ fontSize: 36, marginBottom: 8 }}>💑</div>
         <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800, color: PALETTE.text }}>Notre espace partagé</h1>
         <p style={{ margin: "8px 0 0", color: PALETTE.muted, fontSize: 15 }}>Organisez votre quotidien ensemble ✨</p>
-        <p style={{ margin: "4px 0 0", color: PALETTE.muted, fontSize: 12 }}>🔄 Synchronisé toutes les 5 secondes</p>
+        <p style={{ margin: "4px 0 0", color: PALETTE.muted, fontSize: 12 }}>🔄 Synchronisé toutes les 6 secondes</p>
       </div>
       <div style={{ display: "flex", gap: 24, justifyContent: "center", flexWrap: "wrap", maxWidth: 1100, margin: "0 auto" }}>
         <Section title="Tâches ménagères" emoji="🏠" storageKey="tasks" accentColor={PALETTE.primary} bgAccent={PALETTE.primaryLight} />
