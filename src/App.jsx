@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 
-const API = "https://kvdb.io/9BzxQLB6fgkXnhKEHRCpVD/";
+const DB_URL = "https://liste-matelo-default-rtdb.europe-west1.firebasedatabase.app";
 
 const PALETTE = {
   bg: "#F7F4FB", card: "#FFFFFF", primary: "#9B7FD4", primaryLight: "#EDE7F6",
@@ -10,15 +10,18 @@ const PALETTE = {
 
 async function loadData(key) {
   try {
-    const res = await fetch(API + key);
-    if (!res.ok) return [];
-    const text = await res.text();
-    return JSON.parse(text) || [];
+    const res = await fetch(`${DB_URL}/${key}.json`);
+    const data = await res.json();
+    return data || [];
   } catch { return []; }
 }
 
 async function saveData(key, items) {
-  await fetch(API + key, { method: "POST", body: JSON.stringify(items) });
+  await fetch(`${DB_URL}/${key}.json`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(items),
+  });
 }
 
 function CheckCircle({ checked, color }) {
@@ -52,13 +55,12 @@ function Section({ title, emoji, storageKey, accentColor, bgAccent }) {
   const [syncing, setSyncing] = useState(false);
   const inputRef = useRef();
   const saving = useRef(false);
-  const inputRef2 = useRef("");
+  const currentInput = useRef("");
 
   const fetchData = async () => {
-    if (saving.current) return;
-    if (inputRef2.current !== "") return;
+    if (saving.current || currentInput.current !== "") return;
     const data = await loadData(storageKey);
-    setItems(data);
+    setItems(Array.isArray(data) ? data : []);
     setLoading(false);
   };
 
@@ -70,7 +72,7 @@ function Section({ title, emoji, storageKey, accentColor, bgAccent }) {
 
   const handleInput = (val) => {
     setInput(val);
-    inputRef2.current = val;
+    currentInput.current = val;
   };
 
   const saveItems = async (newItems) => {
